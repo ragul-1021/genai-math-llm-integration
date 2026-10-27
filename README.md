@@ -34,16 +34,108 @@ To develop a chat completion system that uses an LLM to identify mathematical op
 
 ## PROGRAM
 
-The program is implemented in a Jupyter Notebook using Python, Groq API, LangChain, and JSON for handling tool-call arguments.
+## Json model
 
-The implementation includes:
-- LLM initialization using `init_chat_model()`
-- Tool definition using `@tool`
-- Tool binding using `bind_tools()`
-- JSON-based argument handling
-- Execution of the selected mathematical function
+```
+import os
+from dotenv import load_dotenv
+from groq import Groq
 
-Refer to the Jupyter Notebook (`.ipynb`) in this repository for the complete source code.
+load_dotenv()
+
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+def get_weather(city):
+    return f"The weather in {city} is sunny."
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get weather information for a city",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "Name of the city"
+                    }
+                },
+                "required": ["city"]
+            }
+        }
+    }
+]
+
+import json
+
+response = client.chat.completions.create(
+    model="openai/gpt-oss-20b",
+    messages=[
+        {
+            "role": "user",
+            "content": "What is the weather in Chennai?"
+        }
+    ],
+    tools=tools,
+    tool_choice="auto"
+)
+
+message = response.choices[0].message
+
+if message.tool_calls:
+    for tool_call in message.tool_calls:
+        function_name = tool_call.function.name
+        arguments = json.loads(tool_call.function.arguments)
+
+        if function_name == "get_weather":
+            result = get_weather(**arguments)
+            print("Function result:", result)
+else:
+    print(message.content)
+```
+
+## init_chat_model
+
+```
+import os
+from dotenv import load_dotenv
+from langchain.chat_models import init_chat_model
+
+load_dotenv()
+
+llm = init_chat_model(
+    "openai/gpt-oss-20b",
+    model_provider="groq",
+    api_key=os.getenv("GROQ_API_KEY"),
+    temperature=0
+)
+
+from langchain_core.tools import tool
+
+@tool
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
+
+llm_with_tools = llm.bind_tools([multiply])
+
+response = llm_with_tools.invoke(
+    "What is 10 multiplied by 20?"
+)
+
+print(response.tool_calls)
+
+if response.tool_calls:
+    for tool_call in response.tool_calls:
+        if tool_call["name"] == "multiply":
+            result = multiply.invoke(tool_call["args"])
+            print("Function result:", result)
+else:
+    print(response.content)
+
+```
 
 ## OUTPUT
 
